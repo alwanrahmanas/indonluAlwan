@@ -4,7 +4,10 @@ import os
 
 import torch
 from torch import nn
+import torch.nn as nn
 from torch.nn import CrossEntropyLoss, MSELoss
+import torch.nn.functional as F
+
 
 from transformers.modeling_utils import PreTrainedModel, prune_linear_layer
 from transformers import AlbertPreTrainedModel, BertPreTrainedModel, XLMPreTrainedModel, AlbertModel, BertModel, BertConfig, XLMModel, XLMConfig, XLMRobertaModel, XLMRobertaConfig
@@ -108,6 +111,94 @@ class BertForWordClassification(BertPreTrainedModel):
 
         return outputs  # (loss), scores, (hidden_states), (attentions)
 
+
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from transformers import BertModel, BertPreTrainedModel
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=None, gamma=2, reduction='mean'):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha  # Class weights
+        self.gamma = gamma  # Focusing parameter
+        self.reduction = reduction  # Reduction method
+
+    def forward(self, inputs, targets):
+        if self.alpha is not None:
+            CE_loss = F.cross_entropy(inputs, targets, reduction='none', weight=self.alpha)
+        else:
+            CE_loss = F.cross_entropy(inputs, targets, reduction='none')
+        pt = torch.exp(-CE_loss)
+        F_loss = (1 - pt) ** self.gamma * CE_loss
+
+        if self.reduction == 'mean':
+            return torch.mean(F_loss)
+        elif self.reduction == 'sum':
+            return torch.sum(F_loss)
+        else:
+            return F_loss
+
+class newBertForWordClassification(BertPreTrainedModel):
+    def __init__(self, config, class_weights=None, gamma=2):
+        super().__init__(config)
+        self.num_labels = config.num_labels
+
+        self.bert = BertModel(config)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.classifier = nn.Linear(config.hidden_size, self.num_labels)
+        
+        self.focal_loss = FocalLoss(alpha=class_weights, gamma=gamma)
+
+        self.init_weights()
+
+    def forward(
+        self,
+        input_ids=None,
+        subword_to_word_ids=None,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+        labels=None,
+    ):
+        # Ensure tensors are on the same device
+        device = input_ids.device if input_ids is not None else self.bert.embeddings.word_embeddings.weight.device
+        if self.focal_loss.alpha is not None:
+            self.focal_loss.alpha = self.focal_loss.alpha.to(device)
+
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+        )
+
+        sequence_output = outputs[0]
+
+        # Average the token-level outputs to compute word-level representations
+        max_seq_len = subword_to_word_ids.max() + 1
+        word_latents = []
+        for i in range(max_seq_len):
+            mask = (subword_to_word_ids == i).unsqueeze(dim=-1)
+            word_latents.append((sequence_output * mask).sum(dim=1) / mask.sum())
+        word_batch = torch.stack(word_latents, dim=1)
+
+        sequence_output = self.dropout(word_batch)
+        logits = self.classifier(sequence_output)
+
+        outputs = (logits,) + outputs[2:]  # Add hidden states and attention if they are here
+        if labels is not None:
+            loss = self.focal_loss(logits.view(-1, self.num_labels), labels.view(-1))
+            outputs = (loss,) + outputs
+
+        return outputs  # (loss), scores, (hidden_states), (attentions)
+
+      
 class AlbertForWordClassification(AlbertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
