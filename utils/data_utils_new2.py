@@ -63,6 +63,38 @@ class AspectExtractionDataset(Dataset):
     
     def __len__(self):
         return len(self.data)
+       
+class AspectExtractionDataLoader(DataLoader):
+    def __init__(self, max_seq_len=512, *args, **kwargs):
+        super(AspectExtractionDataLoader, self).__init__(*args, **kwargs)
+        self.collate_fn = self._collate_fn
+        self.max_seq_len = max_seq_len
+        
+    def _collate_fn(self, batch):
+        batch_size = len(batch)
+        max_seq_len = max(map(lambda x: len(x[0]), batch))
+        max_seq_len = min(self.max_seq_len, max_seq_len)
+        max_tgt_len = max(map(lambda x: len(x[2]), batch))
+        
+        subword_batch = np.zeros((batch_size, max_seq_len), dtype=np.int64)
+        mask_batch = np.zeros((batch_size, max_seq_len), dtype=np.float32)
+        subword_to_word_indices_batch = np.full((batch_size, max_seq_len), -1, dtype=np.int64)
+        seq_label_batch = np.full((batch_size, max_tgt_len), -100, dtype=np.int64)
+        
+        seq_list = []
+        for i, (subwords, subword_to_word_indices, seq_label, raw_seq) in enumerate(batch):
+            subwords = subwords[:max_seq_len]
+            subword_to_word_indices = subword_to_word_indices[:max_seq_len]
+            
+            subword_batch[i,:len(subwords)] = subwords
+            mask_batch[i,:len(subwords)] = 1
+            subword_to_word_indices_batch[i,:len(subwords)] = subword_to_word_indices
+            seq_label_batch[i,:len(seq_label)] = seq_label
+
+            seq_list.append(raw_seq)
+            
+        return subword_batch, mask_batch, subword_to_word_indices_batch, seq_label_batch, seq_list
+
       
 #####
 # BUAT CLASS BARU NERGRITDATASETNEW
@@ -83,10 +115,13 @@ class NerGritDatasetNew(Dataset):
         dataset = []
         sentence = []
         seq_label = []
+        i = 0
         for line in data: # memastikan bahwa setiap berita diikuti oleh baris kosong
-            # print("line",line)
+            print("line",line)
             if len(line.strip()) > 0:
+              	print(i)
                 token, label = line[:-1].split('\t') # [:-1] untuk menghilangkan karakter baris baru 
+                print(token)
                 sentence.append(token)
                 seq_label.append(self.LABEL2INDEX[label]) #LABEL2INDEX harus didefinisikan sebelumnya
             else:
@@ -96,6 +131,7 @@ class NerGritDatasetNew(Dataset):
                 })
                 sentence = []
                 seq_label = []
+             i=i+1
         print ("dataset",dataset)
         return dataset
     
@@ -131,39 +167,9 @@ class NerGritDatasetNew(Dataset):
         return np.array(subwords), np.array(subword_to_word_indices), np.array(seq_label), data['sentence']
     
     def __len__(self):
-        return len(self.data)
-       
-class AspectExtractionDataLoader(DataLoader):
-    def __init__(self, max_seq_len=512, *args, **kwargs):
-        super(AspectExtractionDataLoader, self).__init__(*args, **kwargs)
-        self.collate_fn = self._collate_fn
-        self.max_seq_len = max_seq_len
-        
-    def _collate_fn(self, batch):
-        batch_size = len(batch)
-        max_seq_len = max(map(lambda x: len(x[0]), batch))
-        max_seq_len = min(self.max_seq_len, max_seq_len)
-        max_tgt_len = max(map(lambda x: len(x[2]), batch))
-        
-        subword_batch = np.zeros((batch_size, max_seq_len), dtype=np.int64)
-        mask_batch = np.zeros((batch_size, max_seq_len), dtype=np.float32)
-        subword_to_word_indices_batch = np.full((batch_size, max_seq_len), -1, dtype=np.int64)
-        seq_label_batch = np.full((batch_size, max_tgt_len), -100, dtype=np.int64)
-        
-        seq_list = []
-        for i, (subwords, subword_to_word_indices, seq_label, raw_seq) in enumerate(batch):
-            subwords = subwords[:max_seq_len]
-            subword_to_word_indices = subword_to_word_indices[:max_seq_len]
-            
-            subword_batch[i,:len(subwords)] = subwords
-            mask_batch[i,:len(subwords)] = 1
-            subword_to_word_indices_batch[i,:len(subwords)] = subword_to_word_indices
-            seq_label_batch[i,:len(seq_label)] = seq_label
-
-            seq_list.append(raw_seq)
-            
-        return subword_batch, mask_batch, subword_to_word_indices_batch, seq_label_batch, seq_list
-    
+        return len(self.data) 
+      
+      
 #####
 # Ner Grit + Prosa
 #####

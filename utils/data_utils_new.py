@@ -15,88 +15,40 @@ class AspectExtractionDataset(Dataset):
     INDEX2LABEL = {0: 'I-SENTIMENT', 1: 'O', 2: 'I-ASPECT', 3: 'B-SENTIMENT', 4: 'B-ASPECT'}
     NUM_LABELS = 5
     
-    def load_dataset(self, path):
-        # Read file
-        data = open(path,'r').readlines()
+    def load_dataset(path):
+    # Read file
+        data = open(path, 'r').readlines()
 
         # Prepare buffer
         dataset = []
         sentence = []
         seq_label = []
         for line in data:
-            if '\t' in line:
-                token, label = line[:-1].split('\t')
-                sentence.append(token)
-                seq_label.append(self.LABEL2INDEX[label])
-            else:
-                dataset.append({
-                    'sentence': sentence,
-                    'seq_label': seq_label
-                })
-                sentence = []
-                seq_label = []
-        return dataset
-    
-    def __init__(self, dataset_path, tokenizer, *args, **kwargs):
-        self.data = self.load_dataset(dataset_path)
-        self.tokenizer = tokenizer
-        
-    def __getitem__(self, index):
-        data = self.data[index]
-        sentence, seq_label = data['sentence'], data['seq_label']
-        
-        # Add CLS token
-        subwords = [self.tokenizer.cls_token_id]
-        subword_to_word_indices = [-1] # For CLS
-        
-        # Add subwords
-        for word_idx, word in enumerate(sentence):
-            subword_list = self.tokenizer.encode(word, add_special_tokens=False)
-            subword_to_word_indices += [word_idx for i in range(len(subword_list))]
-            subwords += subword_list
-            
-        # Add last SEP token
-        subwords += [self.tokenizer.sep_token_id]
-        subword_to_word_indices += [-1]
-        
-        return np.array(subwords), np.array(subword_to_word_indices), np.array(seq_label), data['sentence']
-    
-    def __len__(self):
-        return len(self.data)
-      
-#####
-# BUAT CLASS BARU NERGRITDATASETNEW
-#####
-class NerGritDatasetNew(Dataset):
-    # Static constant variable
-    label_list = ['O','B-TUJUAN','I-TUJUAN','B-METODE','I-METODE','B-TEMUAN','I-TEMUAN']
-    LABEL2INDEX = {label: (i) for i, label in enumerate(label_list)}
-    INDEX2LABEL = {(i): label for i, label in enumerate(label_list)}
-    NUM_LABELS = len(label_list)
-    
-    def load_dataset(self, path):
-        # Read file
-        data = open(path,'r').readlines() 
-        print("data",data)
-        print("path",path)
-        # Prepare buffer
-        dataset = []
-        sentence = []
-        seq_label = []
-        for line in data: # memastikan bahwa setiap berita diikuti oleh baris kosong
-            # print("line",line)
             if len(line.strip()) > 0:
-                token, label = line[:-1].split('\t') # [:-1] untuk menghilangkan karakter baris baru 
-                sentence.append(token)
-                seq_label.append(self.LABEL2INDEX[label]) #LABEL2INDEX harus didefinisikan sebelumnya
+                try:
+                    token, label = line.strip().split('\t')
+                    if label == '':
+                        print(f"Line with empty label: {line.strip()}")
+                    sentence.append(token)
+                    seq_label.append(LABEL2INDEX[label])
+                except ValueError:
+                    print(f"Skipping line due to unexpected format: {line.strip()}")
+                except KeyError:
+                    print(f"Invalid label '{label}' found in line: {line.strip()}")
             else:
-                dataset.append({
-                    'sentence': sentence,
-                    'seq_label': seq_label
-                })
+                if sentence and seq_label:  # Only append if sentence and seq_label are not empty
+                    dataset.append({
+                        'sentence': sentence,
+                        'seq_label': seq_label
+                    })
                 sentence = []
                 seq_label = []
-        print ("dataset",dataset)
+        # Add the last sentence if the file doesn't end with a blank line
+        if sentence and seq_label:
+            dataset.append({
+                'sentence': sentence,
+                'seq_label': seq_label
+            })
         return dataset
     
     def __init__(self, dataset_path, tokenizer, *args, **kwargs):
@@ -120,14 +72,7 @@ class NerGritDatasetNew(Dataset):
         # Add last SEP token
         subwords += [self.tokenizer.sep_token_id]
         subword_to_word_indices += [-1]
-
-        # Coba hitung max_se_len
-        # max_seq = max(len(seq) for seq in subwords)
-        # print("Max Sequenxe Length:", max_seq)
-
-        # max_seq2 = max(len(seq) for seq in subword_to_word_indices)
-        # print("Max Sequenxe Length:", max_seq2)
-
+        
         return np.array(subwords), np.array(subword_to_word_indices), np.array(seq_label), data['sentence']
     
     def __len__(self):
@@ -163,7 +108,75 @@ class AspectExtractionDataLoader(DataLoader):
             seq_list.append(raw_seq)
             
         return subword_batch, mask_batch, subword_to_word_indices_batch, seq_label_batch, seq_list
+
+      
+#####
+# BUAT CLASS BARU NERGRITDATASETNEW
+#####
+class NerGritDatasetNew(Dataset):
+    # Static constant variable
+    label_list = ['O','B-TUJUAN','I-TUJUAN','B-METODE','I-METODE','B-TEMUAN','I-TEMUAN']
+    LABEL2INDEX = {label: (i) for i, label in enumerate(label_list)}
+    INDEX2LABEL = {(i): label for i, label in enumerate(label_list)}
+    NUM_LABELS = len(label_list)
     
+    def load_dataset(self, path):
+        # Read file
+        data = open(path,'r').readlines()
+
+        # Prepare buffer
+        dataset = []
+        sentence = []
+        seq_label = []
+        for line in data:
+            if len(line.strip()) > 0:
+                token, label = line[:-1].split('\t')
+                sentence.append(token)
+                seq_label.append(self.LABEL2INDEX[label])
+            else:
+                dataset.append({
+                    'sentence': sentence,
+                    'seq_label': seq_label
+                })
+                sentence = []
+                seq_label = []
+        return dataset
+    
+    def __init__(self, dataset_path, tokenizer, *args, **kwargs):
+        self.data = self.load_dataset(dataset_path)
+        self.tokenizer = tokenizer
+        
+    def __getitem__(self, index):
+        data = self.data[index]
+        sentence, seq_label = data['sentence'], data['seq_label']
+        
+        # Add CLS token
+        subwords = [self.tokenizer.cls_token_id]
+        subword_to_word_indices = [-1] # For CLS
+        
+        # Add subwords
+        for word_idx, word in enumerate(sentence):
+            subword_list = self.tokenizer.encode(word, add_special_tokens=False)
+            subword_to_word_indices += [word_idx for i in range(len(subword_list))]
+            subwords += subword_list
+            
+        # Add last SEP token
+        subwords += [self.tokenizer.sep_token_id]
+        subword_to_word_indices += [-1]
+
+        # Coba hitung max_se_len
+        # max_seq = max(len(seq) for seq in subwords)
+        # print("Max Sequenxe Length:", max_seq)
+
+        # max_seq2 = max(len(seq) for seq in subword_to_word_indices)
+        # print("Max Sequenxe Length:", max_seq2)
+
+        return np.array(subwords), np.array(subword_to_word_indices), np.array(seq_label), data['sentence']
+    
+    def __len__(self):
+        return len(self.data) 
+      
+      
 #####
 # Ner Grit + Prosa
 #####
