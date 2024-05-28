@@ -315,7 +315,7 @@ class NerDataLoader(DataLoader):
             subword_batch[i,:len(subwords)] = subwords
             mask_batch[i,:len(subwords)] = 1
             subword_to_word_indices_batch[i,:len(subwords)] = subword_to_word_indices
-            seq_label_batch[i,:len(seq_label)] = seq_label
+            seq_label_batch[i,:len(subwords)] = seq_label
 
             seq_list.append(raw_seq)
             
