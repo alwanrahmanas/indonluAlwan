@@ -118,55 +118,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import BertModel, BertPreTrainedModel
 
-# class FocalLoss(nn.Module):
-#     def __init__(self, alpha=None, gamma=2, reduction='mean'):
-#         super(FocalLoss, self).__init__()
-#         self.alpha = alpha  # Class weights
-#         self.gamma = gamma  # Focusing parameter
-#         self.reduction = reduction  # Reduction method
-
-#     def forward(self, inputs, targets):
-#         if self.alpha is not None:
-#             CE_loss = F.cross_entropy(inputs, targets, reduction='none', weight=self.alpha)
-#         else:
-#             CE_loss = F.cross_entropy(inputs, targets, reduction='none')
-#         pt = torch.exp(-CE_loss)
-#         F_loss = (1 - pt) ** self.gamma * CE_loss
-
-#         if self.reduction == 'mean':
-#             return torch.mean(F_loss)
-#         elif self.reduction == 'sum':
-#             return torch.sum(F_loss)
-#         else:
-#             return F_loss
-
 class FocalLoss(nn.Module):
-    def __init__(self, alpha=None, gamma=2, reduction='mean', epsilon=1e-5):
+    def __init__(self, alpha=None, gamma=2, reduction='mean'):
         super(FocalLoss, self).__init__()
         self.alpha = alpha  # Class weights
         self.gamma = gamma  # Focusing parameter
         self.reduction = reduction  # Reduction method
-        self.epsilon = epsilon  # Small value to avoid log(0)
 
     def forward(self, inputs, targets):
-        # Check for NaNs or Infs in inputs and targets
-        if torch.isnan(inputs).any() or torch.isinf(inputs).any():
-            raise ValueError("Inputs contain NaNs or Infs")
-        if torch.isnan(targets).any() or torch.isinf(targets).any():
-            raise ValueError("Targets contain NaNs or Infs")
-
-        # Clamp inputs to avoid extreme values
-        inputs = torch.clamp(inputs, min=-10, max=10)
-
         if self.alpha is not None:
-            self.alpha = self.alpha.to(inputs.device)
-            if torch.isnan(self.alpha).any() or torch.isinf(self.alpha).any():
-                raise ValueError("Class weights contain NaNs or Infs")
-            CE_loss = F.cross_entropy(inputs + self.epsilon, targets, reduction='none', weight=self.alpha)
+            CE_loss = F.cross_entropy(inputs, targets, reduction='none', weight=self.alpha)
         else:
-            CE_loss = F.cross_entropy(inputs + self.epsilon, targets, reduction='none')
-
-        # Add epsilon to avoid log(0) issues in F_loss calculation
+            CE_loss = F.cross_entropy(inputs, targets, reduction='none')
         pt = torch.exp(-CE_loss)
         F_loss = (1 - pt) ** self.gamma * CE_loss
 
@@ -176,6 +139,43 @@ class FocalLoss(nn.Module):
             return torch.sum(F_loss)
         else:
             return F_loss
+
+# class FocalLoss(nn.Module):
+#     def __init__(self, alpha=None, gamma=2, reduction='mean', epsilon=1e-5):
+#         super(FocalLoss, self).__init__()
+#         self.alpha = alpha  # Class weights
+#         self.gamma = gamma  # Focusing parameter
+#         self.reduction = reduction  # Reduction method
+#         self.epsilon = epsilon  # Small value to avoid log(0)
+
+#     def forward(self, inputs, targets):
+#         # Check for NaNs or Infs in inputs and targets
+#         if torch.isnan(inputs).any() or torch.isinf(inputs).any():
+#             raise ValueError("Inputs contain NaNs or Infs")
+#         if torch.isnan(targets).any() or torch.isinf(targets).any():
+#             raise ValueError("Targets contain NaNs or Infs")
+
+#         # Clamp inputs to avoid extreme values
+#         inputs = torch.clamp(inputs, min=-10, max=10)
+
+#         if self.alpha is not None:
+#             self.alpha = self.alpha.to(inputs.device)
+#             if torch.isnan(self.alpha).any() or torch.isinf(self.alpha).any():
+#                 raise ValueError("Class weights contain NaNs or Infs")
+#             CE_loss = F.cross_entropy(inputs + self.epsilon, targets, reduction='none', weight=self.alpha)
+#         else:
+#             CE_loss = F.cross_entropy(inputs + self.epsilon, targets, reduction='none')
+
+#         # Add epsilon to avoid log(0) issues in F_loss calculation
+#         pt = torch.exp(-CE_loss)
+#         F_loss = (1 - pt) ** self.gamma * CE_loss
+
+#         if self.reduction == 'mean':
+#             return torch.mean(F_loss)
+#         elif self.reduction == 'sum':
+#             return torch.sum(F_loss)
+#         else:
+#             return F_loss
 
 
 class newBertForWordClassification(BertPreTrainedModel):
