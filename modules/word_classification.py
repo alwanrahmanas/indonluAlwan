@@ -141,7 +141,7 @@ from transformers import BertModel, BertPreTrainedModel
 #             return F_loss
 
 class FocalLoss(nn.Module):
-    def __init__(self, alpha=None, gamma=2, reduction='mean', epsilon=1e-8):
+    def __init__(self, alpha=None, gamma=2, reduction='mean', epsilon=1e-5):
         super(FocalLoss, self).__init__()
         self.alpha = alpha  # Class weights
         self.gamma = gamma  # Focusing parameter
