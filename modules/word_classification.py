@@ -118,12 +118,35 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import BertModel, BertPreTrainedModel
 
+# class FocalLoss(nn.Module):
+#     def __init__(self, alpha=None, gamma=2, reduction='mean'):
+#         super(FocalLoss, self).__init__()
+#         self.alpha = alpha  # Class weights
+#         self.gamma = gamma  # Focusing parameter
+#         self.reduction = reduction  # Reduction method
+
+#     def forward(self, inputs, targets):
+#         if self.alpha is not None:
+#             CE_loss = F.cross_entropy(inputs, targets, reduction='none', weight=self.alpha)
+#         else:
+#             CE_loss = F.cross_entropy(inputs, targets, reduction='none')
+#         pt = torch.exp(-CE_loss)
+#         F_loss = (1 - pt) ** self.gamma * CE_loss
+
+#         if self.reduction == 'mean':
+#             return torch.mean(F_loss)
+#         elif self.reduction == 'sum':
+#             return torch.sum(F_loss)
+#         else:
+#             return F_loss
+
 class FocalLoss(nn.Module):
-    def __init__(self, alpha=None, gamma=2, reduction='mean'):
+    def __init__(self, alpha=None, gamma=2, reduction='mean', epsilon=1e-8):
         super(FocalLoss, self).__init__()
         self.alpha = alpha  # Class weights
         self.gamma = gamma  # Focusing parameter
         self.reduction = reduction  # Reduction method
+        self.epsilon = epsilon  # Small value to avoid log(0)
 
     def forward(self, inputs, targets):
         if self.alpha is not None:
@@ -132,6 +155,9 @@ class FocalLoss(nn.Module):
             CE_loss = F.cross_entropy(inputs, targets, reduction='none')
         pt = torch.exp(-CE_loss)
         F_loss = (1 - pt) ** self.gamma * CE_loss
+
+        # Introduce epsilon to prevent log(0) and numerical instability
+        F_loss = F_loss + self.epsilon
 
         if self.reduction == 'mean':
             return torch.mean(F_loss)
