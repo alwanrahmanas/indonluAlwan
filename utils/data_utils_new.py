@@ -129,6 +129,7 @@ class NerGritDatasetNew(Dataset):
         sentence = []
         seq_label = []
         for line in data:
+            print(line)
             if len(line.strip()) > 0:
                 token, label = line[:-1].split('\t')
                 sentence.append(token)
