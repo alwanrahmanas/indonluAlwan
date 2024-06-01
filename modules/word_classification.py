@@ -122,18 +122,19 @@ class WeightedDiceLoss(nn.Module):
 
     def forward(self, inputs, targets):
         # Flatten inputs and targets
-        inputs_flat = inputs.view(-1)
-        targets_flat = targets.view(-1)
+        inputs_flat = inputs.view(-1, inputs.size(-1))
+        targets_flat = targets.view(-1, targets.size(-1))
 
         if self.class_weights is not None:
             weights = torch.tensor(self.class_weights, dtype=inputs.dtype, device=inputs.device)
-            intersection = (weights * inputs_flat * targets_flat).sum()
-            dice_coeff = (2. * intersection + self.smooth) / ((weights * inputs_flat).sum() + (weights * targets_flat).sum() + self.smooth)
+            weights = weights.unsqueeze(0)  # Add batch dimension
+            intersection = (weights * inputs_flat * targets_flat).sum(dim=0)
+            dice_coeff = (2. * intersection + self.smooth) / ((weights * inputs_flat).sum(dim=0) + (weights * targets_flat).sum(dim=0) + self.smooth)
         else:
-            intersection = (inputs_flat * targets_flat).sum()
-            dice_coeff = (2. * intersection + self.smooth) / (inputs_flat.sum() + targets_flat.sum() + self.smooth)
+            intersection = (inputs_flat * targets_flat).sum(dim=0)
+            dice_coeff = (2. * intersection + self.smooth) / (inputs_flat.sum(dim=0) + targets_flat.sum(dim=0) + self.smooth)
 
-        return 1 - dice_coeff
+        return 1 - dice_coeff.mean()
 
 class DiceBertForWordClassification(BertPreTrainedModel):
     def __init__(self, config, class_weights=None):
@@ -185,7 +186,7 @@ class DiceBertForWordClassification(BertPreTrainedModel):
 
         outputs = (logits,) + outputs[2:]  # Add hidden states and attention if they are here
         if labels is not None:
-            loss = self.weighted_dice_loss(logits.view(-1, self.num_labels), labels.view(-1))
+            loss = self.weighted_dice_loss(logits.view(-1, self.num_labels), labels.view(-1, self.num_labels))
             outputs = (loss,) + outputs
 
         return outputs  # (loss), scores, (hidden_states), (attentions)
