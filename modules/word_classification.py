@@ -50,12 +50,13 @@ class WeightedDiceLoss(nn.Module):
         if self.class_weights is not None:
             weights = torch.tensor(self.class_weights, dtype=inputs.dtype, device=inputs.device)
             intersection = (weights * inputs_flat * targets_flat).sum()
-            dice_coeff = (2. * intersection + self.smooth) / (weights * inputs_flat).sum() + weights * targets_flat).sum() + self.smooth)
+            dice_coeff = (2. * intersection + self.smooth) / ((weights * inputs_flat).sum() + (weights * targets_flat).sum() + self.smooth)
         else:
             intersection = (inputs_flat * targets_flat).sum()
             dice_coeff = (2. * intersection + self.smooth) / (inputs_flat.sum() + targets_flat.sum() + self.smooth)
 
         return 1 - dice_coeff
+
 
 class DiceBertForWordClassification(BertPreTrainedModel):
     def __init__(self, config, class_weights, gamma=2):
