@@ -34,6 +34,8 @@ XLM_PRETRAINED_MODEL_ARCHIVE_MAP = {
     "xlm-mlm-17-1280": "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-17-1280-pytorch_model.bin",
     "xlm-mlm-100-1280": "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-100-1280-pytorch_model.bin",
 }
+
+
 class WeightedDiceLoss(nn.Module):
     def __init__(self, smooth=1., class_weights=None):
         super(WeightedDiceLoss, self).__init__()
@@ -55,7 +57,7 @@ class WeightedDiceLoss(nn.Module):
 
         return 1 - dice_coeff
 
-class DiceBertForWordClassification(BertPreTrainedModel):
+class newBertForWordClassification(BertPreTrainedModel):
     def __init__(self, config, class_weights, gamma=2):
         super().__init__(config)
         self.num_labels = config.num_labels
@@ -107,6 +109,9 @@ class DiceBertForWordClassification(BertPreTrainedModel):
             outputs = (loss,) + outputs
 
         return outputs  # (loss), scores, (hidden_states), (attentions)
+
+
+
 class BertForWordClassification(BertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
