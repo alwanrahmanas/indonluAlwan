@@ -123,18 +123,17 @@ class WeightedDiceLoss(nn.Module):
     def forward(self, inputs, targets):
         # Flatten inputs and targets
         inputs_flat = inputs.view(-1, inputs.size(-1))
-        targets_flat = targets.view(-1, targets.size(-1))
+        targets_flat = targets.view(-1, inputs.size(-1))
 
         if self.class_weights is not None:
             weights = torch.tensor(self.class_weights, dtype=inputs.dtype, device=inputs.device)
-            weights = weights.unsqueeze(0)  # Add batch dimension
-            intersection = (weights * inputs_flat * targets_flat).sum(dim=0)
-            dice_coeff = (2. * intersection + self.smooth) / ((weights * inputs_flat).sum(dim=0) + (weights * targets_flat).sum(dim=0) + self.smooth)
+            intersection = (weights * inputs_flat * targets_flat).sum()
+            dice_coeff = (2. * intersection + self.smooth) / ((weights * inputs_flat).sum() + (weights * targets_flat).sum() + self.smooth)
         else:
-            intersection = (inputs_flat * targets_flat).sum(dim=0)
-            dice_coeff = (2. * intersection + self.smooth) / (inputs_flat.sum(dim=0) + targets_flat.sum(dim=0) + self.smooth)
+            intersection = (inputs_flat * targets_flat).sum()
+            dice_coeff = (2. * intersection + self.smooth) / (inputs_flat.sum() + targets_flat.sum() + self.smooth)
 
-        return 1 - dice_coeff.mean()
+        return 1 - dice_coeff
 
 class DiceBertForWordClassification(BertPreTrainedModel):
     def __init__(self, config, class_weights=None):
@@ -143,7 +142,7 @@ class DiceBertForWordClassification(BertPreTrainedModel):
 
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.classifier = nn.Linear(config.hidden_size, self.num_labels)
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
         self.weighted_dice_loss = WeightedDiceLoss(class_weights=class_weights)
 
@@ -160,8 +159,6 @@ class DiceBertForWordClassification(BertPreTrainedModel):
         inputs_embeds=None,
         labels=None,
     ):
-        device = input_ids.device if input_ids is not None else self.bert.embeddings.word_embeddings.weight.device
-
         outputs = self.bert(
             input_ids,
             attention_mask=attention_mask,
@@ -177,7 +174,7 @@ class DiceBertForWordClassification(BertPreTrainedModel):
         max_seq_len = subword_to_word_ids.max() + 1
         word_latents = []
         for i in range(max_seq_len):
-            mask = (subword_to_word_ids == i).unsqueeze(dim=-1).to(device)
+            mask = (subword_to_word_ids == i).unsqueeze(dim=-1)
             word_latents.append((sequence_output * mask).sum(dim=1) / mask.sum())
         word_batch = torch.stack(word_latents, dim=1)
 
@@ -186,7 +183,8 @@ class DiceBertForWordClassification(BertPreTrainedModel):
 
         outputs = (logits,) + outputs[2:]  # Add hidden states and attention if they are here
         if labels is not None:
-            loss = self.weighted_dice_loss(logits.view(-1, self.num_labels), labels.view(-1, self.num_labels))
+            labels_one_hot = F.one_hot(labels, num_classes=self.num_labels).float()
+            loss = self.weighted_dice_loss(logits, labels_one_hot)
             outputs = (loss,) + outputs
 
         return outputs  # (loss), scores, (hidden_states), (attentions)
