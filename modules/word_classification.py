@@ -34,7 +34,79 @@ XLM_PRETRAINED_MODEL_ARCHIVE_MAP = {
     "xlm-mlm-17-1280": "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-17-1280-pytorch_model.bin",
     "xlm-mlm-100-1280": "https://s3.amazonaws.com/models.huggingface.co/bert/xlm-mlm-100-1280-pytorch_model.bin",
 }
+class WeightedDiceLoss(nn.Module):
+    def __init__(self, smooth=1., class_weights=None):
+        super(WeightedDiceLoss, self).__init__()
+        self.smooth = smooth
+        self.class_weights = class_weights
 
+    def forward(self, inputs, targets):
+        # Flatten inputs and targets
+        inputs_flat = inputs.view(-1)
+        targets_flat = targets.view(-1)
+
+        if self.class_weights is not None:
+            weights = torch.tensor(self.class_weights, dtype=inputs.dtype, device=inputs.device)
+            intersection = (weights * inputs_flat * targets_flat).sum()
+            dice_coeff = (2. * intersection + self.smooth) / (weights * inputs_flat).sum() + weights * targets_flat).sum() + self.smooth)
+        else:
+            intersection = (inputs_flat * targets_flat).sum()
+            dice_coeff = (2. * intersection + self.smooth) / (inputs_flat.sum() + targets_flat.sum() + self.smooth)
+
+        return 1 - dice_coeff
+
+class DiceBertForWordClassification(BertPreTrainedModel):
+    def __init__(self, config, class_weights, gamma=2):
+        super().__init__(config)
+        self.num_labels = config.num_labels
+
+        self.bert = BertModel(config)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+
+        self.weighted_dice_loss = WeightedDiceLoss(class_weights=class_weights)
+
+        self.init_weights()
+
+    def forward(
+        self,
+        input_ids=None,
+        subword_to_word_ids=None,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+        labels=None,
+    ):
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+        )
+
+        sequence_output = outputs[0]
+
+        # Average the token-level outputs to compute word-level representations
+        max_seq_len = subword_to_word_ids.max() + 1
+        word_latents = []
+        for i in range(max_seq_len):
+            mask = (subword_to_word_ids == i).unsqueeze(dim=-1)
+            word_latents.append((sequence_output * mask).sum(dim=1) / mask.sum())
+        word_batch = torch.stack(word_latents, dim=1)
+
+        sequence_output = self.dropout(word_batch)
+        logits = self.classifier(sequence_output)
+
+        outputs = (logits,) + outputs[2:]  # Add hidden states and attention if they are here
+        if labels is not None:
+            loss = self.weighted_dice_loss(logits.view(-1, self.num_labels), labels.view(-1))
+            outputs = (loss,) + outputs
+
+        return outputs  # (loss), scores, (hidden_states), (attentions)
 class BertForWordClassification(BertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
