@@ -57,7 +57,7 @@ class WeightedDiceLoss(nn.Module):
 
         return 1 - dice_coeff
 
-class newBertForWordClassification(BertPreTrainedModel):
+class DiceBertForWordClassification(BertPreTrainedModel):
     def __init__(self, config, class_weights, gamma=2):
         super().__init__(config)
         self.num_labels = config.num_labels
