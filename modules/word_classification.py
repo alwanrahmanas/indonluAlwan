@@ -203,14 +203,17 @@ class FocalLoss(nn.Module):
         self.alpha = alpha  # Class weights
         self.gamma = gamma  # Focusing parameter
         self.reduction = reduction  # Reduction method
+        self.eps = eps  # Small epsilon value for numerical stability
 
     def forward(self, inputs, targets):
         if self.alpha is not None:
             CE_loss = F.cross_entropy(inputs, targets, reduction='none', weight=self.alpha)
         else:
             CE_loss = F.cross_entropy(inputs, targets, reduction='none')
+        
         pt = torch.exp(-CE_loss)
         pt = torch.clamp(pt, min=self.eps, max=1.0 - self.eps)
+        
         F_loss = (1 - pt) ** self.gamma * CE_loss
 
         if self.reduction == 'mean':
