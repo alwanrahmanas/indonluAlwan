@@ -275,7 +275,7 @@ import torch.nn.functional as F
 from transformers import BertModel, BertPreTrainedModel
 
 class FocalLoss(nn.Module):
-    def __init__(self, alpha=None, gamma=2, reduction='mean'):
+    def __init__(self, alpha=None, gamma=2, reduction='mean', eps=1e-8):
         super(FocalLoss, self).__init__()
         self.alpha = alpha  # Class weights
         self.gamma = gamma  # Focusing parameter
@@ -287,6 +287,7 @@ class FocalLoss(nn.Module):
         else:
             CE_loss = F.cross_entropy(inputs, targets, reduction='none')
         pt = torch.exp(-CE_loss)
+        pt = torch.clamp(pt, min=self.eps, max=1.0 - self.eps)
         F_loss = (1 - pt) ** self.gamma * CE_loss
 
         if self.reduction == 'mean':
