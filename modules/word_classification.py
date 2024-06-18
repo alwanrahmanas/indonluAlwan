@@ -212,7 +212,7 @@ class FocalLoss(nn.Module):
             CE_loss = F.cross_entropy(inputs, targets, reduction='none')
         
         pt = torch.exp(-CE_loss)
-        pt = torch.clamp(pt, min=self.eps, max=1.0 - self.eps)
+        # pt = torch.clamp(pt, min=self.eps, max=1.0 - self.eps)
         
         F_loss = (1 - pt) ** self.gamma * CE_loss
 
